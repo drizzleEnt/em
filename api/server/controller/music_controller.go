@@ -3,6 +3,8 @@ package controller
 import (
 	"net/http"
 
+	"github.com/drizzleent/em/internal/converter"
+	"github.com/drizzleent/em/internal/logger"
 	"github.com/drizzleent/em/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -25,10 +27,20 @@ func (mc *musicController) GetSong(ctx *gin.Context) {
 }
 
 func (mc *musicController) AddSong(ctx *gin.Context) {
-	err := mc.srv.Add()
+	info, err := converter.FromReqToSong(ctx)
 	if err != nil {
-		NewErrorResponse(ctx, http.StatusInternalServerError, "failed to add song: "+err.Error())
+		logger.Error("failed to parse song: " + err.Error())
+		NewErrorResponse(ctx, http.StatusBadRequest, "failed to parse song: "+err.Error())
+		return
 	}
+	err = mc.srv.Add(ctx, info)
+	if err != nil {
+		logger.Error("failed to add song: " + err.Error())
+		NewErrorResponse(ctx, http.StatusInternalServerError, "failed to add song: "+err.Error())
+		return
+	}
+
+	ctx.JSON(http.StatusOK, "song was added")
 }
 
 func (mc *musicController) DeleteSong(ctx *gin.Context) {

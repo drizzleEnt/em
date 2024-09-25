@@ -2,13 +2,21 @@ package app
 
 import (
 	"context"
+	"flag"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/drizzleent/em/internal/config"
+	"github.com/drizzleent/em/internal/logger"
+	"github.com/natefinch/lumberjack"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
+
+var logLevel = flag.String("l", "info", "log level")
 
 type App struct {
 	serviceProvider *serviceProvider
@@ -73,6 +81,8 @@ func (a *App) initServiceProvider(_ context.Context) error {
 }
 
 func (a *App) initHTTPServcer(ctx context.Context) error {
+	logger.Init(getCore(getAtomicLevel()))
+
 	srv := http.Server{
 		Addr:           a.serviceProvider.HTTPConfig().Address(),
 		Handler:        a.serviceProvider.Engine(ctx),
@@ -93,4 +103,40 @@ func (a *App) runHTTPServer() error {
 		return err
 	}
 	return nil
+}
+
+func getCore(level zap.AtomicLevel) zapcore.Core {
+	stdout := zapcore.AddSync(os.Stdout)
+
+	file := zapcore.AddSync(&lumberjack.Logger{
+		Filename:   "logs/app.log",
+		MaxSize:    10,
+		MaxAge:     7,
+		MaxBackups: 3,
+	})
+
+	productionCfg := zap.NewProductionEncoderConfig()
+	productionCfg.TimeKey = "timestamp"
+	productionCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+
+	develomentCfg := zap.NewDevelopmentEncoderConfig()
+	develomentCfg.EncodeLevel = zapcore.CapitalColorLevelEncoder
+
+	consoleEncoder := zapcore.NewConsoleEncoder(develomentCfg)
+	fileEncoder := zapcore.NewJSONEncoder(productionCfg)
+
+	return zapcore.NewTee(
+		zapcore.NewCore(consoleEncoder, stdout, level),
+		zapcore.NewCore(fileEncoder, file, level),
+	)
+}
+
+func getAtomicLevel() zap.AtomicLevel {
+	var level zapcore.Level
+
+	if err := level.Set(*logLevel); err != nil {
+		log.Fatalf("failed to set log level: %v", err)
+	}
+
+	return zap.NewAtomicLevelAt(level)
 }

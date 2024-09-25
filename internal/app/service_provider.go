@@ -9,12 +9,16 @@ import (
 	"github.com/drizzleent/em/internal/config/env"
 	"github.com/drizzleent/em/internal/service"
 	"github.com/drizzleent/em/internal/service/music"
+	"github.com/drizzleent/em/pkg/client/db"
+	"github.com/drizzleent/em/pkg/client/db/pg"
 	"github.com/gin-gonic/gin"
 )
 
 type serviceProvider struct {
 	httpConfig config.HTTPConfig
 	pgConfig   config.PGConfig
+
+	dbClient db.Client
 
 	musicService service.MusicService
 
@@ -35,6 +39,33 @@ func (s *serviceProvider) HTTPConfig() config.HTTPConfig {
 	}
 
 	return s.httpConfig
+}
+
+func (s *serviceProvider) PGConfig() config.HTTPConfig {
+	if nil == s.pgConfig {
+		cfg, err := env.NewPGConfig()
+		if err != nil {
+			log.Fatalf("failed to get pg config: %s", err.Error())
+		}
+		s.pgConfig = cfg
+	}
+
+	return s.pgConfig
+}
+
+func (s *serviceProvider) DBClient(ctx context.Context) db.Client {
+	if nil == s.dbClient {
+		cl, err := pg.New(ctx, s.PGConfig().Address())
+		if err != nil {
+			log.Fatalf("Failed to create db client %s", err.Error())
+		}
+		err = cl.DB().Ping(ctx)
+		if err != nil {
+			log.Fatalf("Failed to ping db %s", err.Error())
+		}
+		s.dbClient = cl
+	}
+	return s.dbClient
 }
 
 func (s *serviceProvider) MusicService(ctx context.Context) service.MusicService {
