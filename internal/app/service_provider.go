@@ -68,6 +68,8 @@ func (s *serviceProvider) DBClient(ctx context.Context) db.Client {
 	return s.dbClient
 }
 
+
+
 func (s *serviceProvider) MusicService(ctx context.Context) service.MusicService {
 	if nil == s.musicService {
 		s.musicService = music.NewMusicService()
